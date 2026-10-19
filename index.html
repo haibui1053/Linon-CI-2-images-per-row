@@ -1,0 +1,992 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>QC Report Builder - 2 Ảnh Mỗi Hàng Trong Báo Cáo</title>
+<meta name="description" content="Tạo báo cáo kiểm hàng tiền xuất xưởng (QC Report), xuất file Word (.docx) và PDF chuẩn 2 hình mỗi hàng trong báo cáo in ra.">
+<!-- External Libraries via CDN -->
+<script src="https://cdn.jsdelivr.net/npm/docx@9.6.1/dist/index.iife.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jspdf-autotable@3.8.2/dist/jspdf.plugin.autotable.min.js"></script>
+<style>
+  :root {
+    --ink: #1c1c1a;
+    --paper: #fafaf7;
+    --line: #d8d6cd;
+    --accent: #c0503a;
+    --accent-hover: #aa432f;
+    --ok: #3d6b47;
+    --panel: #f1efe7;
+    --muted: #6b6a63;
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body {
+    margin: 0; padding: 0; background: var(--paper); color: var(--ink);
+    max-width: 100vw; overflow-x: hidden;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  }
+  body { padding-bottom: 90px; }
+  
+  /* Header */
+  header {
+    position: sticky; top: 0; z-index: 20; background: var(--ink); color: #fff;
+    padding: 12px 16px; display: flex; align-items: center; justify-content: space-between; gap: 12px;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.12);
+  }
+  .brand { display: flex; align-items: center; gap: 10px; }
+  .logo-box {
+    width: 34px; height: 34px; border-radius: 8px; background: var(--accent);
+    color: #fff; font-weight: 800; display: flex; align-items: center; justify-content: center; font-size: 14px;
+  }
+  .title { font-size: 15px; font-weight: 700; display: flex; align-items: center; gap: 6px; }
+  .badge-2col {
+    font-size: 10px; font-weight: 700; text-transform: uppercase;
+    background: rgba(255,255,255,0.15); color: #fde047; padding: 2px 7px; border-radius: 4px;
+  }
+  .sub { font-size: 11px; color: #b9b8b1; margin-top: 2px; }
+  .header-actions { display: flex; align-items: center; gap: 8px; }
+  
+  .btn-sample {
+    padding: 6px 12px; border-radius: 6px; border: 1px solid #3e3d38; background: #2b2b28;
+    color: #fde047; font-size: 11.5px; font-weight: 600; cursor: pointer; transition: background 0.2s;
+  }
+  .btn-sample:hover { background: #383733; }
+  
+  .result-badge {
+    padding: 5px 12px; border-radius: 6px; font-size: 12px; font-weight: 800;
+    background: var(--ok); color: #fff; cursor: pointer; border: none; transition: opacity 0.2s;
+  }
+  .result-badge:hover { opacity: 0.9; }
+  
+  /* Main Container */
+  main { padding: 16px; max-width: 1000px; margin: 0 auto; }
+  @media (min-width: 860px) {
+    main { padding: 24px; }
+    .desktop-grid { display: grid; grid-template-columns: 390px 1fr; gap: 20px; align-items: start; }
+    .desktop-grid .left-col { position: sticky; top: 70px; }
+  }
+  
+  .block {
+    background: #fff; border: 1px solid var(--line); border-radius: 10px;
+    padding: 14px; margin-bottom: 14px; box-shadow: 0 1px 2px rgba(0,0,0,0.03);
+  }
+  .block-title {
+    font-size: 13px; font-weight: 700; margin: 0 0 12px; padding-bottom: 8px;
+    border-bottom: 1px solid var(--line); display: flex; align-items: center; justify-content: space-between;
+  }
+  label { display: block; font-size: 11.5px; font-weight: 600; color: var(--muted); margin: 8px 0 4px; }
+  label:first-of-type { margin-top: 0; }
+  input[type=text], input[type=number], input[type=date], textarea {
+    width: 100%; padding: 8px 10px; font-size: 13.5px; border: 1px solid var(--line); border-radius: 7px;
+    background: var(--paper); color: var(--ink); font-family: inherit; box-sizing: border-box;
+  }
+  input:focus, textarea:focus { outline: 2px solid var(--accent); outline-offset: 1px; background: #fff; }
+  textarea { min-height: 52px; resize: vertical; line-height: 1.4; }
+  .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .row3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 6px; }
+  
+  /* Result Toggle */
+  .result-toggle { display: flex; gap: 8px; margin-top: 10px; }
+  .result-toggle button {
+    flex: 1; padding: 10px; border-radius: 7px; border: 1px solid var(--line);
+    background: #fff; font-size: 12.5px; font-weight: 700; color: var(--muted); cursor: pointer;
+    transition: all 0.2s;
+  }
+  .result-toggle button.active.pass { background: var(--ok); border-color: var(--ok); color: #fff; }
+  .result-toggle button.active.fail { background: var(--accent); border-color: var(--accent); color: #fff; }
+  
+  /* Carton Box Card */
+  .box-card {
+    border: 1px solid var(--line); border-radius: 8px; padding: 10px; margin-bottom: 10px; background: #fdfdfb;
+  }
+  .box-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+  .box-title { font-size: 12px; font-weight: 700; color: var(--ink); }
+  
+  /* Section Card */
+  .section-card {
+    background: #fff; border: 1px solid var(--line); border-radius: 10px;
+    margin-bottom: 14px; overflow: hidden; box-shadow: 0 1px 2px rgba(0,0,0,0.03);
+  }
+  .section-head {
+    display: flex; align-items: center; gap: 8px; padding: 10px 12px; background: var(--panel);
+    border-bottom: 1px solid var(--line);
+  }
+  .section-head input {
+    flex: 1; min-width: 0; border: none; background: transparent; padding: 2px 0;
+    font-size: 13.5px; font-weight: 700;
+  }
+  .section-head input:focus { outline: none; border-bottom: 1px solid var(--accent); background: #fff; }
+  .section-del {
+    flex-shrink: 0; width: 26px; height: 26px; border-radius: 6px; border: 1px solid var(--line);
+    background: #fff; color: var(--muted); font-size: 13px; display: flex; align-items: center; justify-content: center;
+    cursor: pointer;
+  }
+  .section-del:hover { color: var(--accent); background: #fef2f2; }
+  .section-body { padding: 12px; }
+  
+  /* STRICT 2-COLUMN PHOTO GRID (MỖI HÀNG 2 HÌNH) */
+  .photo-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 10px;
+    margin-top: 10px;
+  }
+  .photo-slot {
+    position: relative; width: 100%; aspect-ratio: 4 / 3; border-radius: 7px; overflow: hidden;
+    background: var(--paper); border: 1px solid var(--line); box-sizing: border-box;
+  }
+  .photo-slot img {
+    position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; display: block;
+  }
+  .photo-remove {
+    position: absolute; top: 4px; right: 4px; width: 22px; height: 22px; border-radius: 50%;
+    background: rgba(28,28,26,.75); color: #fff; font-size: 12px; display: flex; align-items: center;
+    justify-content: center; border: none; cursor: pointer; transition: background 0.2s;
+  }
+  .photo-remove:hover { background: var(--accent); }
+  .photo-tag {
+    position: absolute; top: 4px; left: 4px; font-size: 9px; font-weight: 700; color: #fff;
+    background: rgba(28,28,26,.65); border-radius: 4px; padding: 1px 5px;
+  }
+  .photo-size {
+    position: absolute; bottom: 3px; left: 3px; font-size: 8px; color: #fff;
+    background: rgba(28,28,26,.65); border-radius: 3px; padding: 1px 4px; font-family: monospace;
+  }
+  
+  .photo-add {
+    position: relative; width: 100%; aspect-ratio: 4 / 3; border-radius: 7px;
+    border: 1.5px dashed var(--line); background: var(--paper); cursor: pointer; display: flex;
+    flex-direction: column; align-items: center; justify-content: center; box-sizing: border-box;
+    transition: all 0.2s;
+  }
+  .photo-add:hover { border-color: var(--accent); background: #fdf6f5; }
+  .photo-add .plus { font-size: 24px; line-height: 1; color: var(--accent); margin-bottom: 2px; }
+  .photo-add .label { font-size: 11.5px; font-weight: 700; color: var(--ink); }
+  .photo-add .hint { font-size: 9.5px; color: var(--muted); }
+  
+  .add-section-btn {
+    width: 100%; padding: 12px; border-radius: 8px; border: 1.5px dashed var(--line);
+    background: #fff; color: var(--accent); font-weight: 700; font-size: 13px; cursor: pointer;
+    transition: background 0.2s;
+  }
+  .add-section-btn:hover { background: #fdf6f5; border-color: var(--accent); }
+  
+  /* Footer Actions */
+  footer.action-bar {
+    position: fixed; bottom: 0; left: 0; right: 0; background: #fff; border-top: 1px solid var(--line);
+    padding: 10px 14px calc(10px + env(safe-area-inset-bottom)); display: flex; gap: 8px; z-index: 30;
+    box-shadow: 0 -2px 10px rgba(0,0,0,0.05);
+  }
+  @media (min-width: 860px) {
+    footer.action-bar { left: 50%; transform: translateX(-50%); max-width: 1000px; border-radius: 10px 10px 0 0; border: 1px solid var(--line); }
+  }
+  .btn {
+    flex: 1; padding: 11px 8px; border-radius: 8px; border: none; font-size: 13px; font-weight: 700;
+    text-align: center; cursor: pointer; transition: all 0.2s; display: flex; align-items: center; justify-content: center; gap: 5px;
+  }
+  .btn-secondary { background: var(--paper); border: 1px solid var(--line); color: var(--ink); }
+  .btn-secondary:hover { background: #eee; }
+  .btn-primary { background: var(--accent); color: #fff; }
+  .btn-primary:hover { background: var(--accent-hover); }
+  .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+  
+  .status-toast {
+    position: fixed; left: 50%; transform: translateX(-50%); bottom: 74px; z-index: 50;
+    background: var(--ink); color: #fff; border-radius: 8px; padding: 9px 16px; font-size: 12.5px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.25); display: none;
+  }
+  .note { font-size: 11px; color: var(--muted); margin-top: 4px; line-height: 1.4; }
+  
+  @media print {
+    body { padding-bottom: 0 !important; background: #fff !important; }
+    header, footer, .add-section-btn, .photo-add, .photo-remove, .section-del { display: none !important; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="brand">
+    <div class="logo-box">QC</div>
+    <div>
+      <div class="title">
+        <span>QC Report Builder</span>
+        <span class="badge-2col">2 Ảnh / Hàng In Ra</span>
+      </div>
+      <div class="sub">Xuất Word (.docx) & PDF (.pdf) chuẩn 2 hình mỗi hàng</div>
+    </div>
+  </div>
+  <div class="header-actions">
+    <button type="button" class="btn-sample" onclick="loadSampleData()" title="Nạp báo cáo mẫu thử nghiệm có sẵn ảnh">⚡ Dữ liệu mẫu</button>
+    <button type="button" id="resultBadge" class="result-badge" onclick="toggleResult()">PASS</button>
+  </div>
+</header>
+
+<main>
+  <div class="desktop-grid">
+    <!-- Left Column: Info & Carton -->
+    <div class="left-col">
+      <div class="block">
+        <div class="block-title">
+          <span>1. General Information</span>
+          <span style="font-size:10.5px;color:var(--muted)">Thông tin chung</span>
+        </div>
+        <label>Item code / Mã hàng</label>
+        <input type="text" id="f_item" placeholder="VD: Drop Test Report - 23LR1007KG">
+        <div class="row2">
+          <div><label>LINON PO#</label><input type="text" id="f_po" placeholder="VD: PPS"></div>
+          <div><label>Client</label><input type="text" id="f_client" placeholder="VD: LN-WG"></div>
+        </div>
+        <div class="row2">
+          <div><label>Name factory</label><input type="text" id="f_factory" placeholder="VD: BBO"></div>
+          <div><label>Inspector (QC)</label><input type="text" id="f_qc" placeholder="VD: Harry"></div>
+        </div>
+        <label>Inspection date</label>
+        <input type="date" id="f_date">
+        <label>Video link (Drive)</label>
+        <input type="text" id="f_video" placeholder="https://drive.google.com/...">
+      </div>
+
+      <div class="block">
+        <div class="block-title">
+          <span>2. Inspection Data</span>
+          <span style="font-size:10.5px;color:var(--muted)">Số lượng & Lỗi</span>
+        </div>
+        <div class="row2">
+          <div><label>Total qty</label><input type="number" id="f_total" placeholder="VD: 500"></div>
+          <div><label>Qty checked</label><input type="number" id="f_checked" placeholder="VD: 32"></div>
+        </div>
+        <div class="row3">
+          <div><label>Critical</label><input type="number" id="f_critical" value="0"></div>
+          <div><label>Major</label><input type="number" id="f_major" value="0"></div>
+          <div><label>Minor</label><input type="number" id="f_minor" value="0"></div>
+        </div>
+      </div>
+
+      <div class="block">
+        <div class="block-title">
+          <span>3. Carton / Box Information</span>
+          <div style="display:flex;align-items:center;gap:2px;border:1px solid var(--line);border-radius:6px;overflow:hidden;background:#fff;">
+            <button type="button" title="Bớt 1 thùng" onclick="resizeBoxCount(boxCount-1)"
+              style="width:24px;height:24px;border:none;background:#fff;color:var(--accent);font-size:14px;font-weight:700;cursor:pointer;">−</button>
+            <span id="boxCountLabel" style="min-width:20px;text-align:center;font-size:11px;font-weight:700;">1</span>
+            <button type="button" title="Thêm 1 thùng" onclick="resizeBoxCount(boxCount+1)"
+              style="width:24px;height:24px;border:none;background:#fff;color:var(--accent);font-size:14px;font-weight:700;cursor:pointer;">+</button>
+          </div>
+        </div>
+        <div class="note" style="margin:0 0 10px">Tự động tính Cube (cu ft) từ inch: (L×W×H)/1728. Tự động quy đổi kg sang lbs và kiểm tra dung sai GW ±3%.</div>
+        <div id="boxRows"></div>
+      </div>
+    </div>
+
+    <!-- Right Column: Sections with STRICT 2 PHOTOS PER ROW -->
+    <div class="right-col">
+      <div class="block">
+        <div class="block-title">
+          <span>4. Inspection Sections</span>
+          <span style="font-size:11px;font-weight:700;color:var(--accent);">Mỗi hàng 2 hình chuẩn in</span>
+        </div>
+        <div id="sectionsWrap"></div>
+        <button type="button" class="add-section-btn" onclick="addSection('', 6)">+ Thêm mục kiểm tra mới (6 ô ảnh)</button>
+      </div>
+
+      <div class="block">
+        <div class="block-title">
+          <span>Final Result</span>
+          <span style="font-size:10.5px;color:var(--muted)">Kết luận kiểm hàng</span>
+        </div>
+        <div class="result-toggle">
+          <button type="button" id="btnPass" class="active pass" onclick="setResult('PASS')">PASS (ĐẠT)</button>
+          <button type="button" id="btnFail" class="fail" onclick="setResult('FAIL')">FAIL (KHÔNG ĐẠT)</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</main>
+
+<footer class="action-bar">
+  <button type="button" class="btn btn-secondary" id="previewBtn" onclick="window.print()">🖨️ In A4</button>
+  <button type="button" class="btn btn-secondary" id="exportBtn" onclick="exportWord()">📄 Xuất Word (.docx)</button>
+  <button type="button" class="btn btn-primary" id="pdfBtn" onclick="exportPDF()">📥 Lưu PDF (.pdf)</button>
+</footer>
+
+<div id="statusToast" class="status-toast"></div>
+<input type="file" id="globalFileInput" accept="image/*" multiple style="display:none">
+
+<script>
+const { Document, Packer, Paragraph, TextRun, Table, TableRow, TableCell,
+  WidthType, ShadingType, BorderStyle, ImageRun, AlignmentType,
+  HeadingLevel, VerticalAlign, Header, Footer, PageNumber, PageBreak } = docx;
+
+const INK="1C1C1A", MUTED="6B6A63", LINE="D8D6CD", ACCENT="C0503A", OK="3D6B47", PANEL="F1EFE7";
+const PAGE_W=11906, PAGE_H=16838, MARGIN=360, CONTENT_W=PAGE_W-MARGIN*2; // 11186 dxa
+
+let sections = [];
+let secCounter = 0;
+let currentResult = 'PASS';
+
+function showToast(msg) {
+  const el = document.getElementById('statusToast');
+  el.textContent = msg;
+  el.style.display = 'block';
+  setTimeout(() => { el.style.display = 'none'; }, 4000);
+}
+
+function setResult(r){
+  currentResult = r;
+  document.getElementById('btnPass').classList.toggle('active', r==='PASS');
+  document.getElementById('btnFail').classList.toggle('active', r==='FAIL');
+  const badge = document.getElementById('resultBadge');
+  badge.textContent = r;
+  badge.style.background = (r === 'PASS') ? 'var(--ok)' : 'var(--accent)';
+}
+function toggleResult(){ setResult(currentResult === 'PASS' ? 'FAIL' : 'PASS'); }
+
+// ---- Box Data ----
+let boxCount = 1;
+let boxData = [{ dim:'40 x 37 x 5', prod:'73.75" x 79" x 14"', gross:'19.5', net:'17.5', claim:'19.5' }];
+
+function kgToLbs(kgStr){
+  const kg = parseFloat(String(kgStr).replace(',', '.'));
+  if (isNaN(kg)) return '';
+  return (kg * 2.20462).toFixed(1);
+}
+
+function cubicFeetFromDim(str){
+  const nums = (str || '').match(/\d+(?:[.,]\d+)?/g);
+  if (!nums || nums.length < 3) return '';
+  const [l, w, h] = nums.slice(0,3).map(n => parseFloat(n.replace(',', '.')));
+  const cuFt = (l * w * h) / 1728;
+  return isFinite(cuFt) && cuFt > 0 ? cuFt.toFixed(2) : '';
+}
+
+function gwVarText(actualStr, claimStr){
+  const a = parseFloat(String(actualStr).replace(',', '.'));
+  const c = parseFloat(String(claimStr).replace(',', '.'));
+  if (isNaN(a) || isNaN(c) || c <= 0) return { text:'—', bad:false };
+  const v = ((a - c) / c * 100);
+  const rounded = parseFloat(v.toFixed(1));
+  return { text: (rounded >= 0 ? '+' : '') + rounded.toFixed(1) + '%', bad: Math.abs(rounded) > 3.0 };
+}
+
+function refreshGwVar(i){
+  const el = document.getElementById('box_gwvar_'+i);
+  const chip = document.getElementById('box_gwvar_chip_'+i);
+  if (!el || !chip) return;
+  const r = gwVarText(boxData[i].gross, boxData[i].claim);
+  el.textContent = r.text;
+  el.style.color = r.text === '—' ? 'var(--muted)' : (r.bad ? 'var(--accent)' : 'var(--ok)');
+  chip.style.borderColor = r.bad ? 'var(--accent)' : 'var(--line)';
+}
+
+function updateBoxField(i, field, value){
+  if (!boxData[i]) return;
+  boxData[i][field] = value;
+  if (field === 'gross' || field === 'claim') refreshGwVar(i);
+  if (field === 'dim'){
+    const el = document.getElementById('box_cube_val_'+i);
+    if (el) el.textContent = cubicFeetFromDim(value) || '0.00';
+  }
+  if (field === 'gross'){
+    const el = document.getElementById('box_gross_lbs_note_'+i);
+    if (el) el.textContent = '≈ ' + (kgToLbs(value) || '0.0') + ' lbs';
+  }
+  if (field === 'net'){
+    const el = document.getElementById('box_net_lbs_note_'+i);
+    if (el) el.textContent = '≈ ' + (kgToLbs(value) || '0.0') + ' lbs';
+  }
+}
+
+function resizeBoxCount(n){
+  n = Math.max(1, Math.min(20, n));
+  const next = [];
+  for (let i = 0; i < n; i++) next.push(boxData[i] || { dim:'', prod:'', gross:'', net:'', claim:'' });
+  boxData = next;
+  boxCount = n;
+  document.getElementById('boxCountLabel').textContent = n;
+  renderBoxRows();
+}
+
+function renderBoxRows(){
+  const wrap = document.getElementById('boxRows');
+  wrap.innerHTML = '';
+  boxData.forEach((b,i)=>{
+    const card = document.createElement('div');
+    card.className = 'box-card';
+    card.innerHTML = `
+      <div class="box-header">
+        <span class="box-title">Box ${i+1} of ${boxCount}</span>
+      </div>
+      <div style="margin-bottom:8px;">
+        <label>Box Dimension (Overall - inch)</label>
+        <div style="display:flex;gap:6px;align-items:stretch;">
+          <input type="text" id="box_dim_${i}" placeholder="L x W x H" value="${b.dim}" style="flex:1;min-width:0;" oninput="updateBoxField(${i},'dim',this.value)">
+          <div style="flex-shrink:0;min-width:70px;padding:0 8px;border:1px solid var(--line);border-radius:7px;background:var(--panel);display:flex;flex-direction:column;align-items:center;justify-content:center;line-height:1.15;">
+            <div style="font-size:8.5px;color:var(--muted);font-weight:600;">Cube (cu ft)</div>
+            <div id="box_cube_val_${i}" style="font-size:12px;font-weight:700;color:var(--ink);">${cubicFeetFromDim(b.dim) || '0.00'}</div>
+          </div>
+        </div>
+      </div>
+      <div style="margin-bottom:8px;">
+        <label>Product Dimension (inch)</label>
+        <input type="text" id="box_prod_${i}" placeholder="L x W x H" value="${b.prod}" oninput="updateBoxField(${i},'prod',this.value)">
+      </div>
+      <div class="row2">
+        <div>
+          <label>GW (Gross kg)</label>
+          <input type="text" id="box_gross_${i}" placeholder="kg" value="${b.gross}" oninput="updateBoxField(${i},'gross',this.value)">
+          <div class="note" id="box_gross_lbs_note_${i}">≈ ${kgToLbs(b.gross) || '0.0'} lbs</div>
+        </div>
+        <div>
+          <label>NW (Net kg)</label>
+          <input type="text" id="box_net_${i}" placeholder="kg" value="${b.net}" oninput="updateBoxField(${i},'net',this.value)">
+          <div class="note" id="box_net_lbs_note_${i}">≈ ${kgToLbs(b.net) || '0.0'} lbs</div>
+        </div>
+      </div>
+      <div style="margin-top:8px;">
+        <label>GW in trên thùng (kg) — dung sai ±3%</label>
+        <div style="display:flex;gap:6px;align-items:stretch;">
+          <input type="text" id="box_claim_${i}" placeholder="kg in trên carton" value="${b.claim}" style="flex:1;min-width:0;" oninput="updateBoxField(${i},'claim',this.value)">
+          <div id="box_gwvar_chip_${i}" style="flex-shrink:0;min-width:75px;padding:0 8px;border:1px solid var(--line);border-radius:7px;background:var(--panel);display:flex;flex-direction:column;align-items:center;justify-content:center;line-height:1.15;">
+            <div style="font-size:8.5px;color:var(--muted);font-weight:600;">Lệch GW %</div>
+            <div id="box_gwvar_${i}" style="font-size:12px;font-weight:700;color:var(--muted);">—</div>
+          </div>
+        </div>
+      </div>
+    `;
+    wrap.appendChild(card);
+    refreshGwVar(i);
+  });
+}
+
+// ---- Sections (multiples of 2 slots!) ----
+function addSection(name, slotCount){
+  secCounter++;
+  const count = slotCount || 6; // 3 rows of 2 images
+  sections.push({ id:'sec'+secCounter, name:name||`Mục kiểm tra ${sections.length+1}`, desc:'', photos:new Array(count).fill(null) });
+  renderSections();
+}
+function removeSection(id){
+  if (sections.length <= 1) {
+    showToast('Cần giữ ít nhất 1 mục kiểm tra');
+    return;
+  }
+  sections = sections.filter(s=>s.id!==id);
+  renderSections();
+}
+function updateSectionField(id, field, value){
+  const s = sections.find(s=>s.id===id);
+  if (s) s[field] = value;
+}
+function resizeSlotCount(secId, delta){
+  const s = sections.find(s=>s.id===secId);
+  if (!s) return;
+  const newCount = Math.max(2, s.photos.length + delta);
+  const old = s.photos;
+  const next = new Array(newCount).fill(null);
+  for (let i = 0; i < Math.min(old.length, newCount); i++) next[i] = old[i];
+  s.photos = next;
+  renderSections();
+}
+
+function fmtSize(bytes){
+  if (bytes < 1024) return bytes+'B';
+  if (bytes < 1024*1024) return Math.round(bytes/1024)+'KB';
+  return (bytes/1024/1024).toFixed(1)+'MB';
+}
+
+function compressImage(file){
+  return new Promise((resolve,reject)=>{
+    const reader = new FileReader();
+    reader.onload = e => {
+      const img = new Image();
+      img.onload = () => {
+        const MAX = 1400;
+        let w = img.width, h = img.height;
+        if (w > h && w > MAX) { h = Math.round(h*MAX/w); w = MAX; }
+        else if (h >= w && h > MAX) { w = Math.round(w*MAX/h); h = MAX; }
+        const canvas = document.createElement('canvas');
+        canvas.width = w; canvas.height = h;
+        const ctx = canvas.getContext('2d');
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(0, 0, w, h);
+        ctx.drawImage(img, 0, 0, w, h);
+        canvas.toBlob(blob => {
+          const fr = new FileReader();
+          fr.onload = ev => resolve({ dataUrl: ev.target.result, blob, w, h, size: blob.size });
+          fr.readAsDataURL(blob);
+        }, 'image/jpeg', 0.82);
+      };
+      img.onerror = reject;
+      img.src = e.target.result;
+    };
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
+
+let pendingSlot = null;
+function openPickerForSlot(secId, idx){
+  pendingSlot = { secId, idx };
+  document.getElementById('globalFileInput').click();
+}
+document.getElementById('globalFileInput').addEventListener('change', async function(){
+  const files = Array.from(this.files || []);
+  this.value = '';
+  if (!pendingSlot || !files.length) return;
+  const s = sections.find(s=>s.id===pendingSlot.secId);
+  if (!s) return;
+  let slotIdx = pendingSlot.idx;
+  for (const file of files){
+    while (slotIdx < s.photos.length && s.photos[slotIdx] !== null) slotIdx++;
+    if (slotIdx >= s.photos.length){
+      for (let k = 0; k < 2; k++) s.photos.push(null); // step by 2
+    }
+    s.photos[slotIdx] = await compressImage(file);
+    slotIdx++;
+  }
+  renderSections();
+  pendingSlot = null;
+});
+
+function removePhoto(secId, idx){
+  const s = sections.find(s=>s.id===secId);
+  if (s) { s.photos[idx] = null; renderSections(); }
+}
+
+function renderSections(){
+  const wrap = document.getElementById('sectionsWrap');
+  wrap.innerHTML = '';
+  sections.forEach((s, si)=>{
+    const filledCount = s.photos.filter(Boolean).length;
+    const card = document.createElement('div');
+    card.className = 'section-card';
+    card.innerHTML = `
+      <div class="section-head">
+        <span style="font-size:12px;color:var(--muted);font-weight:700;min-width:14px;flex-shrink:0">${si+1}.</span>
+        <input type="text" placeholder="Tên mục kiểm tra" value="${s.name}"
+          oninput="updateSectionField('${s.id}','name',this.value)">
+        <div style="display:flex;flex-shrink:0;align-items:center;gap:2px;border:1px solid var(--line);border-radius:6px;overflow:hidden;background:#fff;">
+          <button type="button" title="Bớt 2 ô ảnh (1 hàng)" onclick="resizeSlotCount('${s.id}', -2)"
+            style="padding:3px 7px;border:none;background:#fff;color:var(--accent);font-size:11px;font-weight:700;cursor:pointer;">-2</button>
+          <span style="min-width:24px;text-align:center;font-size:11px;font-weight:700;color:var(--ink);">${s.photos.length} ô</span>
+          <button type="button" title="Thêm 2 ô ảnh (1 hàng)" onclick="resizeSlotCount('${s.id}', 2)"
+            style="padding:3px 7px;border:none;background:#fff;color:var(--accent);font-size:11px;font-weight:700;cursor:pointer;">+2</button>
+        </div>
+        <button type="button" class="section-del" onclick="removeSection('${s.id}')">✕</button>
+      </div>
+      <div class="section-body">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+          <span class="note" style="margin:0">Đã chụp ${filledCount} / ${s.photos.length} ảnh</span>
+          <span style="font-size:10px;font-weight:700;color:var(--accent);">Lưới 2 hình / hàng chuẩn in</span>
+        </div>
+        <textarea placeholder="Ghi chú / Nhận xét chi tiết cho mục này..." oninput="updateSectionField('${s.id}','desc',this.value)">${s.desc}</textarea>
+        <div class="photo-grid" id="grid_${s.id}"></div>
+      </div>
+    `;
+    const grid = card.querySelector('#grid_' + s.id);
+    s.photos.forEach((p, idx)=>{
+      const slot = document.createElement('div');
+      if (p){
+        slot.className = 'photo-slot';
+        slot.innerHTML = `
+          <img src="${p.dataUrl}">
+          <div class="photo-tag">Photo ${idx+1}</div>
+          <div class="photo-size">${fmtSize(p.size)}</div>
+          <button type="button" class="photo-remove" onclick="removePhoto('${s.id}',${idx})" title="Xóa ảnh">✕</button>
+        `;
+      } else {
+        slot.className = 'photo-add';
+        slot.innerHTML = `
+          <div class="plus">＋</div>
+          <div class="label">Photo ${idx+1}</div>
+          <div class="hint">Thêm ảnh</div>
+        `;
+        slot.onclick = () => openPickerForSlot(s.id, idx);
+      }
+      grid.appendChild(slot);
+    });
+    wrap.appendChild(card);
+  });
+}
+
+function computeReportName(){
+  const f = document.getElementById('f_factory').value.trim();
+  const po = document.getElementById('f_po').value.trim();
+  const item = document.getElementById('f_item').value.trim();
+  const parts = [];
+  if (f) parts.push(f);
+  if (po) parts.push('PO# ' + po);
+  if (item) parts.push('ITEM# ' + item);
+  return parts.length ? parts.join(' - ') : 'QC_Report';
+}
+function computeFileName(){
+  return computeReportName().replace(/[\\/:*?"<>|#]/g, '').replace(/\s+/g, ' ').trim() || 'QC_Report';
+}
+
+// ---- Word (.docx) Export with STRICT 2 PHOTOS PER ROW ----
+function cellBorderNone(){ return { top:{style:BorderStyle.NONE,size:0,color:"FFFFFF"}, bottom:{style:BorderStyle.NONE,size:0,color:"FFFFFF"}, left:{style:BorderStyle.NONE,size:0,color:"FFFFFF"}, right:{style:BorderStyle.NONE,size:0,color:"FFFFFF"} }; }
+function cellBorderLine(){ return { top:{style:BorderStyle.SINGLE,size:4,color:LINE}, bottom:{style:BorderStyle.SINGLE,size:4,color:LINE}, left:{style:BorderStyle.SINGLE,size:4,color:LINE}, right:{style:BorderStyle.SINGLE,size:4,color:LINE} }; }
+function infoCell(text,isLabel,width,opts){
+  opts = opts || {};
+  return new TableCell({
+    width:{size:width,type:WidthType.DXA},
+    borders: cellBorderLine(),
+    shading: isLabel ? {type:ShadingType.CLEAR,fill:PANEL} : {type:ShadingType.CLEAR,fill:"FFFFFF"},
+    verticalAlign: VerticalAlign.CENTER,
+    margins:{top:70,bottom:70,left:100,right:100},
+    children:[new Paragraph({children:[new TextRun({text:text||'',bold:isLabel||!!opts.bold,size:isLabel?18:19,color:opts.color||(isLabel?INK:MUTED)})]})]
+  });
+}
+
+// 2 columns layout settings for Word
+const COLS_PER_ROW = 2;
+const GAP_COL_W = 200;
+const PHOTO_COL_W = Math.floor((CONTENT_W - GAP_COL_W) / 2); // 5493 dxa
+const PHOTO_BOX_W = Math.round((PHOTO_COL_W / 1440) * 96 * 0.90); // ~330 px
+const PHOTO_BOX_H = Math.round(PHOTO_BOX_W * 0.72); // ~238 px
+
+function containFit(aspect){
+  let dispW, dispH;
+  if (aspect >= PHOTO_BOX_W/PHOTO_BOX_H){ dispW = PHOTO_BOX_W; dispH = PHOTO_BOX_W/aspect; }
+  else { dispH = PHOTO_BOX_H; dispW = PHOTO_BOX_H*aspect; }
+  return { dispW: Math.round(dispW), dispH: Math.round(dispH) };
+}
+
+async function photoCell(dataUrl, w, h){
+  const resp = await fetch(dataUrl);
+  const buf = await resp.arrayBuffer();
+  const { dispW, dispH } = containFit(w/h);
+  return new TableCell({
+    width:{size:PHOTO_COL_W,type:WidthType.DXA}, borders:cellBorderLine(),
+    margins:{top:40,bottom:40,left:20,right:20}, verticalAlign:VerticalAlign.CENTER,
+    shading:{type:ShadingType.CLEAR,fill:"FAFAF7"},
+    children:[new Paragraph({alignment:AlignmentType.CENTER, children:[new ImageRun({type:"jpg", data:new Uint8Array(buf), transformation:{width:dispW,height:dispH}})]})]
+  });
+}
+function gapCell(){ return new TableCell({width:{size:GAP_COL_W,type:WidthType.DXA},borders:cellBorderNone(),children:[new Paragraph({children:[]})]}); }
+function blankCell(){ return new TableCell({width:{size:PHOTO_COL_W,type:WidthType.DXA},borders:cellBorderNone(),children:[new Paragraph({children:[]})]}); }
+function captionCell(text){ return new TableCell({width:{size:PHOTO_COL_W,type:WidthType.DXA},borders:cellBorderNone(),margins:{top:30,bottom:60,left:0,right:0},children:[new Paragraph({alignment:AlignmentType.CENTER,children:[new TextRun({text,size:17,color:MUTED,bold:true})]})]}); }
+
+async function build2ColumnPhotoGridRows(photos){
+  const rows = [];
+  const numRows = Math.ceil(photos.length / COLS_PER_ROW);
+  for (let r=0; r<numRows; r++){
+    const photoRow=[], capRow=[];
+    for (let c=0; c<COLS_PER_ROW; c++){
+      const idx = r * COLS_PER_ROW + c;
+      if (idx < photos.length){
+        const p = photos[idx];
+        if (p) photoRow.push(await photoCell(p.dataUrl, p.w, p.h));
+        else photoRow.push(blankCell());
+        capRow.push(captionCell(`Photo ${idx+1}`));
+      } else {
+        photoRow.push(blankCell()); capRow.push(blankCell());
+      }
+      if (c < COLS_PER_ROW - 1){ photoRow.push(gapCell()); capRow.push(gapCell()); }
+    }
+    rows.push(new TableRow({children:photoRow}));
+    rows.push(new TableRow({children:capRow}));
+  }
+  return rows;
+}
+
+async function exportWord(){
+  const btn = document.getElementById('exportBtn');
+  btn.disabled = true;
+  showToast('Đang tạo file Word (2 ảnh / hàng)...');
+
+  const colW = [2565, 2921, 2565, 3135];
+  const titlePar = new Paragraph({ children:[new TextRun({text:"PRE-SHIPMENT INSPECTION REPORT",bold:true,size:32,color:INK})], spacing:{after:60} });
+  const repName = computeReportName();
+  const subtitlePar = new Paragraph({ children:[new TextRun({text:repName,bold:true,size:22,color:ACCENT})], spacing:{after:160} });
+
+  const infoRows = [
+    ["Item", document.getElementById('f_item').value, "Client", document.getElementById('f_client').value],
+    ["LINON PO#", document.getElementById('f_po').value, "Name factory", document.getElementById('f_factory').value],
+    ["Inspector (QC)", document.getElementById('f_qc').value, "Inspection date", document.getElementById('f_date').value],
+    ["Total qty", document.getElementById('f_total').value, "Qty checked", document.getElementById('f_checked').value],
+    ["Critical / Major / Minor", `${document.getElementById('f_critical').value||0} / ${document.getElementById('f_major').value||0} / ${document.getElementById('f_minor').value||0}`, "Result", currentResult]
+  ];
+  const infoTable = new Table({
+    width:{size:CONTENT_W,type:WidthType.DXA}, columnWidths:colW,
+    rows: infoRows.map((r, i)=>new TableRow({children:[
+      infoCell(r[0],true,colW[0]),
+      infoCell(r[1],false,colW[1]),
+      infoCell(r[2],true,colW[2]),
+      infoCell(r[3],false,colW[3], i===4 ? {bold:true, color:(currentResult==='PASS'?OK:ACCENT)} : null)
+    ]}))
+  });
+
+  const videoLinkTable = new Table({
+    width:{size:CONTENT_W,type:WidthType.DXA}, columnWidths:[colW[0], colW[1]+colW[2]+colW[3]],
+    rows:[new TableRow({children:[
+      infoCell("Video link (Drive)",true,colW[0]),
+      infoCell(document.getElementById('f_video').value || '—',false,colW[1]+colW[2]+colW[3])
+    ]})]
+  });
+
+  const boxColW = [1050, 1850, 1000, 1850, 950, 950, 1450, 950, 1136];
+  const boxHeaderRow = new TableRow({children:[
+    infoCell("Box #",true,boxColW[0]),
+    infoCell("Box Dimension (Overall, in)",true,boxColW[1]),
+    infoCell("Cube (cu ft)",true,boxColW[2]),
+    infoCell("Product Dimension (in)",true,boxColW[3]),
+    infoCell("GW (kg)",true,boxColW[4]),
+    infoCell("GW (lbs)",true,boxColW[5]),
+    infoCell("GW on carton (kg) / Var %",true,boxColW[6]),
+    infoCell("NW (kg)",true,boxColW[7]),
+    infoCell("NW (lbs)",true,boxColW[8])
+  ]});
+  const boxRows = boxData.map((b,i)=>{
+    const v = gwVarText(b.gross, b.claim);
+    return new TableRow({children:[
+      infoCell(`Box ${i+1} of ${boxCount}`,true,boxColW[0]),
+      infoCell(b.dim,false,boxColW[1]),
+      infoCell(cubicFeetFromDim(b.dim)||'—',false,boxColW[2]),
+      infoCell(b.prod,false,boxColW[3]),
+      infoCell(b.gross,false,boxColW[4]),
+      infoCell(kgToLbs(b.gross)||'—',false,boxColW[5]),
+      infoCell(b.claim ? `${b.claim} kg (${v.text})` : '—', false, boxColW[6], v.bad ? {color:"C0503A", bold:true} : null),
+      infoCell(b.net,false,boxColW[7]),
+      infoCell(kgToLbs(b.net)||'—',false,boxColW[8])
+    ]});
+  });
+  const boxTable = new Table({ width:{size:CONTENT_W,type:WidthType.DXA}, columnWidths:boxColW, rows:[boxHeaderRow,...boxRows] });
+
+  const sectionParas = [];
+  for (let i=0; i<sections.length; i++){
+    const s = sections[i];
+    if (i > 0) sectionParas.push(new Paragraph({children:[new PageBreak()]}));
+    sectionParas.push(new Paragraph({ heading:HeadingLevel.HEADING_2, spacing:{before:240,after:60}, children:[new TextRun({text:`${i+1}. ${s.name||'Untitled section'}`,bold:true,size:24,color:INK})] }));
+    if (s.desc) sectionParas.push(new Paragraph({ spacing:{after:120}, children:[new TextRun({text:s.desc,italics:true,size:18,color:MUTED})] }));
+    if (s.photos.length){
+      const rows = await build2ColumnPhotoGridRows(s.photos);
+      sectionParas.push(new Table({ width:{size:CONTENT_W,type:WidthType.DXA}, columnWidths:[PHOTO_COL_W, GAP_COL_W, PHOTO_COL_W], rows }));
+    }
+  }
+
+  const doc = new Document({
+    sections:[{
+      properties:{page:{size:{width:PAGE_W,height:PAGE_H},margin:{top:MARGIN,bottom:MARGIN,left:MARGIN,right:MARGIN}}},
+      headers:{default:new Header({children:[new Paragraph({children:[]})]})},
+      footers:{default:new Footer({children:[new Paragraph({alignment:AlignmentType.RIGHT,children:[new TextRun({text:repName+"  |  Trang ",size:14,color:MUTED}),new TextRun({children:[PageNumber.CURRENT],size:14,color:MUTED})]})]})},
+      children:[titlePar,subtitlePar,infoTable,new Paragraph({spacing:{before:80},children:[]}),videoLinkTable,
+        new Paragraph({spacing:{before:200,after:60},children:[new TextRun({text:"Carton / Box information:",bold:true,italics:true,size:18,color:MUTED})]}),
+        boxTable, ...sectionParas]
+    }]
+  });
+
+  const blob = await Packer.toBlob(doc);
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = computeFileName() + '.docx';
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  btn.disabled = false;
+  showToast('Đã tải file Word: ' + computeFileName() + '.docx');
+}
+
+// ---- PDF Export with STRICT 2 PHOTOS PER ROW ----
+function pdfAscii(s){
+  return String(s == null ? '' : s)
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    .replace(/đ/g, 'd').replace(/Đ/g, 'D')
+    .replace(/[–—]/g, '-').replace(/≈/g, '~').replace(/×/g, 'x').replace(/±/g, '+/-')
+    .replace(/[‘’]/g, "'").replace(/[“”]/g, '"')
+    .replace(/[^\x20-\x7E\n]/g, ' ');
+}
+
+async function exportPDF(){
+  const btn = document.getElementById('pdfBtn');
+  btn.disabled = true;
+  showToast('Đang tạo file PDF (2 ảnh / hàng)...');
+
+  try {
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF({ unit:'mm', format:'a4', compress:true });
+    const PW=210, PH=297, M=10, CW=PW-2*M, BOTTOM=PH-M-6;
+    const C = { ink:[28,28,26], muted:[107,106,99], line:[216,214,205], panel:[241,239,231], accent:[192,80,58], ok:[61,107,71] };
+    let y = M;
+    const ensure = h => { if (y + h > BOTTOM) { doc.addPage(); y = M; } };
+    const lbl = t => ({ content: t, styles: { fontStyle: 'bold', textColor: C.ink, fillColor: C.panel } });
+    const baseStyles = { font: 'helvetica', fontSize: 8, cellPadding: 1.6, lineColor: C.line, lineWidth: 0.2, textColor: C.muted, overflow: 'linebreak' };
+
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(15); doc.setTextColor(...C.ink);
+    doc.text('PRE-SHIPMENT INSPECTION REPORT', M, y + 4.5); y += 9;
+    const repName = computeReportName();
+    doc.setFontSize(10.5); doc.setTextColor(...C.accent);
+    doc.text(pdfAscii(repName), M, y); y += 5;
+
+    const info = [
+      [lbl('Item'), pdfAscii(document.getElementById('f_item').value), lbl('Client'), pdfAscii(document.getElementById('f_client').value)],
+      [lbl('LINON PO#'), pdfAscii(document.getElementById('f_po').value), lbl('Name factory'), pdfAscii(document.getElementById('f_factory').value)],
+      [lbl('Inspector (QC)'), pdfAscii(document.getElementById('f_qc').value), lbl('Inspection date'), pdfAscii(document.getElementById('f_date').value)],
+      [lbl('Total qty'), pdfAscii(document.getElementById('f_total').value), lbl('Qty checked'), pdfAscii(document.getElementById('f_checked').value)],
+      [lbl('Critical / Major / Minor'), `${document.getElementById('f_critical').value||0} / ${document.getElementById('f_major').value||0} / ${document.getElementById('f_minor').value||0}`, lbl('Result'),
+        { content: currentResult, styles: { fontStyle: 'bold', textColor: currentResult === 'PASS' ? C.ok : C.accent } }],
+      [lbl('Video link (Drive)'), { content: pdfAscii(document.getElementById('f_video').value || '—'), colSpan: 3 }]
+    ];
+    const wInfo = [2565, 2921, 2565, 3135].map(w => w / 11186 * CW);
+    doc.autoTable({
+      startY: y, margin: { left: M, right: M }, body: info, theme: 'grid', styles: baseStyles,
+      columnStyles: { 0: { cellWidth: wInfo[0] }, 1: { cellWidth: wInfo[1] }, 2: { cellWidth: wInfo[2] }, 3: { cellWidth: wInfo[3] } }
+    });
+    y = doc.lastAutoTable.finalY + 4.5;
+
+    doc.setFont('helvetica', 'bolditalic'); doc.setFontSize(8); doc.setTextColor(...C.muted);
+    doc.text('Carton / Box information:', M, y); y += 1.5;
+    const boxHead = [['Box #', 'Box Dimension (Overall, in)', 'Cube (cu ft)', 'Product Dimension (in)', 'GW (kg)', 'GW (lbs)', 'GW on carton (kg) / Var %', 'NW (kg)', 'NW (lbs)']];
+    const boxBody = boxData.map((b, i) => {
+      const v = gwVarText(b.gross, b.claim);
+      return [
+        { content: `Box ${i + 1} of ${boxCount}`, styles: { fontStyle: 'bold', textColor: C.ink, fillColor: C.panel } },
+        pdfAscii(b.dim), cubicFeetFromDim(b.dim)||'—', pdfAscii(b.prod), pdfAscii(b.gross), kgToLbs(b.gross)||'—',
+        { content: b.claim ? pdfAscii(`${b.claim} kg (${v.text})`) : '—', styles: v.bad ? { textColor: C.accent, fontStyle: 'bold' } : {} },
+        pdfAscii(b.net), kgToLbs(b.net)||'—'
+      ];
+    });
+    const wBox = [1050, 1850, 1000, 1850, 950, 950, 1450, 950, 1136].map(w => w / 11186 * CW);
+    const colStyles = {}; wBox.forEach((w, i) => { colStyles[i] = { cellWidth: w }; });
+    doc.autoTable({
+      startY: y, margin: { left: M, right: M }, head: boxHead, body: boxBody, theme: 'grid',
+      styles: baseStyles, headStyles: { fillColor: C.panel, textColor: C.ink, fontStyle: 'bold', fontSize: 7 },
+      columnStyles: colStyles
+    });
+    y = doc.lastAutoTable.finalY + 5;
+
+    // STRICT 2 COLUMNS PHOTO GRID IN PDF
+    const COLS = 2, GAP = 6, boxW = (CW - GAP * (COLS - 1)) / COLS, boxH = boxW * 0.72, rowH = boxH + 6.5;
+    sections.forEach((s, i) => {
+      ensure(12 + rowH);
+      doc.setFont('helvetica', 'bold'); doc.setFontSize(10.5); doc.setTextColor(...C.ink);
+      doc.text(pdfAscii(`${i + 1}. ${s.name || 'Untitled section'}`), M, y + 4); y += 6.5;
+      if (s.desc){
+        doc.setFont('helvetica', 'italic'); doc.setFontSize(8); doc.setTextColor(...C.muted);
+        const lines = doc.splitTextToSize(pdfAscii(s.desc), CW);
+        ensure(lines.length * 3.5 + 2);
+        doc.text(lines, M, y + 2.5); y += lines.length * 3.5 + 2;
+      }
+      for (let k = 0; k < s.photos.length; k += COLS){
+        ensure(rowH);
+        for (let c = 0; c < COLS && k + c < s.photos.length; c++){
+          const p = s.photos[k + c];
+          const x = M + c * (boxW + GAP);
+          doc.setDrawColor(...C.line); doc.setLineWidth(0.2); doc.setFillColor(...C.panel);
+          doc.rect(x, y, boxW, boxH, 'FD');
+          if (p){
+            const asp = p.w / p.h;
+            let dw = boxW - 1.2, dh = dw / asp;
+            if (dh > boxH - 1.2){ dh = boxH - 1.2; dw = dh * asp; }
+            doc.addImage(p.dataUrl, 'JPEG', x + (boxW - dw)/2, y + (boxH - dh)/2, dw, dh);
+          } else {
+            doc.setFont('helvetica', 'italic'); doc.setFontSize(7); doc.setTextColor(...C.muted);
+            doc.text('No photo', x + boxW/2, y + boxH/2, { align:'center' });
+          }
+          doc.setFont('helvetica', 'bold'); doc.setFontSize(7); doc.setTextColor(...C.muted);
+          doc.text(`Photo ${k + c + 1}`, x + boxW/2, y + boxH + 4.2, { align:'center' });
+        }
+        y += rowH;
+      }
+      y += 2.5;
+    });
+
+    const totalPages = doc.getNumberOfPages();
+    for (let pg = 1; pg <= totalPages; pg++){
+      doc.setPage(pg);
+      doc.setDrawColor(...C.line); doc.setLineWidth(0.15);
+      doc.line(M, PH - 6, PW - M, PH - 6);
+      doc.setFont('helvetica', 'normal'); doc.setFontSize(6.8); doc.setTextColor(...C.muted);
+      doc.text(pdfAscii(repName), M, PH - 3);
+      doc.text(`Page ${pg} of ${totalPages}`, PW - M, PH - 3, { align: 'right' });
+    }
+
+    doc.save(computeFileName() + '.pdf');
+    showToast('Đã tải file PDF: ' + computeFileName() + '.pdf');
+  } catch (err) {
+    showToast('Lỗi xuất PDF: ' + err.message);
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+// Sample Data Generator
+function loadSampleData(){
+  document.getElementById('f_item').value = 'Drop Test Report - 23LR1007KG (Linon Inhouse)';
+  document.getElementById('f_po').value = 'PPS';
+  document.getElementById('f_client').value = 'LN-WG';
+  document.getElementById('f_factory').value = 'BBO';
+  document.getElementById('f_qc').value = 'Harry';
+  document.getElementById('f_video').value = 'https://drive.google.com/drive/folders/qc-linon-bbo';
+  document.getElementById('f_total').value = '1';
+  document.getElementById('f_checked').value = '1';
+  document.getElementById('f_critical').value = '0';
+  document.getElementById('f_major').value = '0';
+  document.getElementById('f_minor').value = '0';
+  setResult('PASS');
+
+  boxData = [{ dim:'40 x 37 x 5', prod:'73.75" x 79" x 14"', gross:'19.5', net:'17.5', claim:'19.5' }];
+  boxCount = 1;
+  document.getElementById('boxCountLabel').textContent = '1';
+  renderBoxRows();
+
+  // Draw sample canvas photos
+  function makeDemoImg(txt, bg){
+    const c = document.createElement('canvas'); c.width = 600; c.height = 450;
+    const ctx = c.getContext('2d');
+    ctx.fillStyle = bg; ctx.fillRect(0,0,600,450);
+    ctx.fillStyle = '#ffffff'; ctx.font = 'bold 30px sans-serif'; ctx.textAlign = 'center';
+    ctx.fillText(txt, 300, 210);
+    ctx.font = '18px sans-serif'; ctx.fillText('QC Photo · 2 Col Layout', 300, 260);
+    return { dataUrl: c.toDataURL('image/jpeg', 0.8), w: 600, h: 450, size: 28000 };
+  }
+
+  sections = [
+    { id:'sec1', name:'Carton check', desc:'Kiểm tra thùng đóng gói, tem mác và quy cách dán đai', photos:[
+      makeDemoImg('Carton Front','#0284c7'), makeDemoImg('Shipping Mark','#0284c7'),
+      makeDemoImg('GW Weight Scale','#0284c7'), makeDemoImg('Carton Side','#0284c7'),
+      makeDemoImg('Inner Foam','#0284c7'), makeDemoImg('Tape Sealing','#0284c7')
+    ]},
+    { id:'sec2', name:'Drop test', desc:'Follow Linon Drop 6A plus 20%', photos:[
+      makeDemoImg('Drop Corner 1','#dc2626'), makeDemoImg('Drop Edge 2','#dc2626'),
+      makeDemoImg('Drop Face 3','#dc2626'), makeDemoImg('Drop Face 4','#dc2626'),
+      makeDemoImg('Impact Check','#dc2626'), makeDemoImg('Drop Complete','#dc2626')
+    ]},
+    { id:'sec3', name:'Check after drop', desc:'Product is good after drop', photos:[
+      makeDemoImg('Unbox Check','#16a34a'), makeDemoImg('Hardware Bag','#16a34a'),
+      makeDemoImg('Frame Integr.','#16a34a'), makeDemoImg('Corner Weld','#16a34a'),
+      makeDemoImg('Assembly Test','#16a34a'), makeDemoImg('Final Item','#16a34a')
+    ]},
+    { id:'sec4', name:'Dimension of product', desc:'73.75" x 79" x 14"H', photos:[
+      makeDemoImg('Length 79"','#8b5cf6'), makeDemoImg('Width 73.75"','#8b5cf6'),
+      makeDemoImg('Height 14"','#8b5cf6'), null
+    ]},
+    { id:'sec5', name:'Defect found / Repair', desc:'Small scratches been found - Overall is good', photos:[
+      makeDemoImg('Scratch Found','#f59e0b'), makeDemoImg('Repair Paint','#f59e0b')
+    ]},
+    { id:'sec6', name:'Others', desc:'Assembly instruction checklist', photos:[
+      makeDemoImg('Manual Sheet','#64748b'), makeDemoImg('Spare Screws','#64748b')
+    ]}
+  ];
+  secCounter = 6;
+  renderSections();
+  showToast('Đã nạp xong báo cáo mẫu! Bấm "Xuất Word" hoặc "Lưu PDF" để test thử.');
+}
+
+// Preset sections initialization
+const PRESETS = [
+  ["Carton check / Packing / Weight / Label check", 6],
+  ["Drop test (Linon 6A standard)", 6],
+  ["Check after drop", 6],
+  ["Dimension of product", 4],
+  ["Defect found / Repair", 4],
+  ["Others", 4]
+];
+PRESETS.forEach(([name, count]) => addSection(name, count));
+document.getElementById('f_date').valueAsDate = new Date();
+renderBoxRows();
+</script>
+</body>
+</html>
